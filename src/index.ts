@@ -20,12 +20,12 @@ app.use(cors({
 }))
 app.use(express.json())
 
-app.use('/api/auth', authRoutes)
-app.use('/api/products', productRoutes)
-app.use('/api/collections', collectionRoutes)
-app.use('/api/cart', cartRoutes)
-app.use('/api/orders', orderRoutes)
-app.use('/api/addresses', addressRoutes)
+app.use('/auth', authRoutes)
+app.use('/products', productRoutes)
+app.use('/collections', collectionRoutes)
+app.use('/cart', cartRoutes)
+app.use('/orders', orderRoutes)
+app.use('/addresses', addressRoutes)
 
 app.use(errorHandler)
 
