@@ -28,6 +28,7 @@
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^6.19.2",
     "@prisma/config": "^7.5.0",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/storage-js": "^2.99.1",
     "@supabase/supabase-js": "^2.99.1",
     "crypto": "^1.0.1",
