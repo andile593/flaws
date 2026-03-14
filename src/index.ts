@@ -9,6 +9,7 @@ import orderRoutes from './routes/order.routes'
 import addressRoutes from './routes/address.routes'
 import paymentRoutes from './routes/payment.routes'
 import adminRoutes from './admin/routes/admin.routes'
+import contentRoutes from './routes/content.routes'
 import { errorHandler } from './middleware/errorHandler'
 
 const app = express()
@@ -50,6 +51,7 @@ app.use('/orders', orderRoutes)
 app.use('/addresses', addressRoutes)
 app.use('/payment', paymentRoutes)
 app.use('/admin', adminRoutes)
+app.use('/content', contentRoutes)
 
 app.use(errorHandler)
 
