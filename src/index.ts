@@ -27,6 +27,8 @@ app.use('/payment/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+app.set('trust proxy', 1)
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev_secret',
   resave: false,
@@ -34,6 +36,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 1000 * 60 * 60 * 24 * 7, 
   },
 }))

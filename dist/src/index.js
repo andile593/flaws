@@ -27,6 +27,7 @@ app.use((0, cors_1.default)({
 app.use('/payment/webhook', express_1.default.raw({ type: 'application/json' }));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
+app.set('trust proxy', 1);
 app.use((0, express_session_1.default)({
     secret: process.env.SESSION_SECRET || 'dev_secret',
     resave: false,
@@ -34,6 +35,7 @@ app.use((0, express_session_1.default)({
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 1000 * 60 * 60 * 24 * 7,
     },
 }));
