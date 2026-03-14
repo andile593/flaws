@@ -7,6 +7,8 @@ import { getProducts, getNewProduct, postProduct, getEditProduct, postEditProduc
 import { getCollections, getNewCollection, postCollection, getEditCollection, postEditCollection, deleteCollection } from '../controllers/collections.admin'
 import { getOrders, getOrder, updateOrderStatus } from '../controllers/orders.admin'
 import { getUsers } from '../controllers/users.admin'
+import { getActivityLog } from '../controllers/activity.admin'
+import { getHomepage, postHomepage } from '../controllers/homepage.admin'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage() })
@@ -46,5 +48,9 @@ router.post('/orders/:id/status', updateOrderStatus)
 
 // Users
 router.get('/users', getUsers)
+
+router.get('/activity', getActivityLog)
+router.get('/homepage', getHomepage)
+router.post('/homepage', postHomepage)
 
 export default router

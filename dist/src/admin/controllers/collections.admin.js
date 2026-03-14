@@ -11,6 +11,7 @@ exports.postEditCollection = postEditCollection;
 exports.deleteCollection = deleteCollection;
 const prisma_1 = __importDefault(require("../../lib/prisma"));
 const layout_1 = require("../views/layout");
+const logger_1 = require("../lib/logger");
 async function getCollections(req, res) {
     const collections = await prisma_1.default.collection.findMany({
         include: { products: { select: { id: true } } },
@@ -86,7 +87,10 @@ async function getNewCollection(req, res) {
 async function postCollection(req, res) {
     const { name, slug, gender, description } = req.body;
     try {
-        await prisma_1.default.collection.create({ data: { name, slug, gender, description: description || null } });
+        const collection = await prisma_1.default.collection.create({
+            data: { name, slug, gender, description: description || null },
+        });
+        await (0, logger_1.logActivity)('COLLECTION_CREATED', 'Collection', `Collection "${name}" created`, collection.id);
         res.redirect('/admin/collections');
     }
     catch {
@@ -140,6 +144,7 @@ async function postEditCollection(req, res) {
             where: { id },
             data: { name, slug, gender, description: description || null },
         });
+        await (0, logger_1.logActivity)('COLLECTION_UPDATED', 'Collection', `Collection "${name}" updated`, id);
         res.redirect('/admin/collections');
     }
     catch {
@@ -148,6 +153,13 @@ async function postEditCollection(req, res) {
 }
 async function deleteCollection(req, res) {
     const id = req.params.id;
-    await prisma_1.default.collection.delete({ where: { id } });
+    try {
+        const collection = await prisma_1.default.collection.findUnique({ where: { id } });
+        await prisma_1.default.collection.delete({ where: { id } });
+        await (0, logger_1.logActivity)('COLLECTION_DELETED', 'Collection', `Collection "${collection?.name || id}" deleted`, id);
+    }
+    catch (err) {
+        console.error('Delete collection error:', err);
+    }
     res.redirect('/admin/collections');
 }

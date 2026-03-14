@@ -8,6 +8,7 @@ exports.getOrder = getOrder;
 exports.updateOrderStatus = updateOrderStatus;
 const prisma_1 = __importDefault(require("../../lib/prisma"));
 const layout_1 = require("../views/layout");
+const logger_1 = require("../lib/logger");
 async function getOrders(req, res) {
     const status = req.query.status;
     const orders = await prisma_1.default.order.findMany({
@@ -141,5 +142,6 @@ async function updateOrderStatus(req, res) {
     const id = req.params.id;
     const { status } = req.body;
     await prisma_1.default.order.update({ where: { id }, data: { status } });
+    await (0, logger_1.logActivity)('ORDER_STATUS_CHANGED', 'Order', `Order #${id.slice(0, 8).toUpperCase()} status changed to ${status}`, id);
     res.redirect(`/admin/orders/${id}`);
 }

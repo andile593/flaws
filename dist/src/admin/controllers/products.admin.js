@@ -13,6 +13,7 @@ exports.deleteProductImage = deleteProductImage;
 const prisma_1 = __importDefault(require("../../lib/prisma"));
 const layout_1 = require("../views/layout");
 const supabase_1 = require("../../lib/supabase");
+const logger_1 = require("../lib/logger");
 const path_1 = __importDefault(require("path"));
 async function getProducts(req, res) {
     const products = await prisma_1.default.product.findMany({
@@ -213,7 +214,7 @@ async function postProduct(req, res) {
         }
         const variantsRaw = req.body.variants || {};
         const variants = Object.values(variantsRaw);
-        await prisma_1.default.product.create({
+        const product = await prisma_1.default.product.create({
             data: {
                 name, slug,
                 description: description || null,
@@ -239,6 +240,7 @@ async function postProduct(req, res) {
                 },
             },
         });
+        await (0, logger_1.logActivity)('PRODUCT_CREATED', 'Product', `Product "${name}" created`, product.id);
         res.redirect('/admin/products');
     }
     catch (err) {
@@ -424,6 +426,7 @@ async function postEditProduct(req, res) {
                 collectionId: collectionId || null,
             },
         });
+        await (0, logger_1.logActivity)('PRODUCT_UPDATED', 'Product', `Product "${name}" updated`, id);
         res.redirect('/admin/products');
     }
     catch (err) {
@@ -432,7 +435,14 @@ async function postEditProduct(req, res) {
 }
 async function deleteProduct(req, res) {
     const id = req.params.id;
-    await prisma_1.default.product.delete({ where: { id } });
+    try {
+        const product = await prisma_1.default.product.findUnique({ where: { id } });
+        await prisma_1.default.product.delete({ where: { id } });
+        await (0, logger_1.logActivity)('PRODUCT_DELETED', 'Product', `Product "${product?.name || id}" deleted`, id);
+    }
+    catch (err) {
+        console.error('Delete product error:', err);
+    }
     res.redirect('/admin/products');
 }
 async function deleteProductImage(req, res) {

@@ -12,6 +12,8 @@ const products_admin_1 = require("../controllers/products.admin");
 const collections_admin_1 = require("../controllers/collections.admin");
 const orders_admin_1 = require("../controllers/orders.admin");
 const users_admin_1 = require("../controllers/users.admin");
+const activity_admin_1 = require("../controllers/activity.admin");
+const homepage_admin_1 = require("../controllers/homepage.admin");
 const router = (0, express_1.Router)();
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
 // Auth
@@ -43,4 +45,7 @@ router.get('/orders/:id', orders_admin_1.getOrder);
 router.post('/orders/:id/status', orders_admin_1.updateOrderStatus);
 // Users
 router.get('/users', users_admin_1.getUsers);
+router.get('/activity', activity_admin_1.getActivityLog);
+router.get('/homepage', homepage_admin_1.getHomepage);
+router.post('/homepage', homepage_admin_1.postHomepage);
 exports.default = router;

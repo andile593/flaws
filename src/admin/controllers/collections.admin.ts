@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import prisma from '../../lib/prisma'
 import { layout } from '../views/layout'
+import { logActivity } from '../lib/logger'
 
 export async function getCollections(req: Request, res: Response) {
   const collections = await prisma.collection.findMany({
@@ -81,7 +82,10 @@ export async function getNewCollection(req: Request, res: Response) {
 export async function postCollection(req: Request, res: Response) {
   const { name, slug, gender, description } = req.body
   try {
-    await prisma.collection.create({ data: { name, slug, gender, description: description || null } })
+    const collection = await prisma.collection.create({
+      data: { name, slug, gender, description: description || null },
+    })
+    await logActivity('COLLECTION_CREATED', 'Collection', `Collection "${name}" created`, collection.id)
     res.redirect('/admin/collections')
   } catch {
     res.redirect(`/admin/collections/new?error=Slug already exists or invalid data`)
@@ -136,6 +140,7 @@ export async function postEditCollection(req: Request, res: Response) {
       where: { id },
       data: { name, slug, gender, description: description || null },
     })
+    await logActivity('COLLECTION_UPDATED', 'Collection', `Collection "${name}" updated`, id)
     res.redirect('/admin/collections')
   } catch {
     res.redirect(`/admin/collections/${id}/edit?error=Failed to update`)
@@ -144,6 +149,12 @@ export async function postEditCollection(req: Request, res: Response) {
 
 export async function deleteCollection(req: Request, res: Response) {
   const id = req.params.id as string
-  await prisma.collection.delete({ where: { id } })
+  try {
+    const collection = await prisma.collection.findUnique({ where: { id } })
+    await prisma.collection.delete({ where: { id } })
+    await logActivity('COLLECTION_DELETED', 'Collection', `Collection "${collection?.name || id}" deleted`, id)
+  } catch (err) {
+    console.error('Delete collection error:', err)
+  }
   res.redirect('/admin/collections')
 }

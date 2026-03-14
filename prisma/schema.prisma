@@ -93,11 +93,11 @@ model ProductVariant {
   product    Product    @relation(fields: [productId], references: [id])
   productId  String
   size       Size
-  color      String     // e.g. "Black", "Coral Pink"
-  colorHex   String?    // e.g. "#FF6B6B" for UI color swatches
+  color      String    
+  colorHex   String?    
   sku        String     @unique
   price      Decimal    @db.Decimal(10, 2)
-  salePrice  Decimal?   @db.Decimal(10, 2) // discounted price if on sale
+  salePrice  Decimal?   @db.Decimal(10, 2) 
   stock      Int        @default(0)
   cart       Cart[]
   orderItems OrderItem[]
@@ -110,7 +110,7 @@ model ProductImage {
   url       String
   altText   String?
   isPrimary Boolean @default(false)
-  position  Int     @default(0) // controls display order
+  position  Int     @default(0) 
 }
 
 model Cart {
@@ -124,7 +124,7 @@ model Cart {
   quantity  Int
   addedAt   DateTime       @default(now())
 
-  @@unique([userId, variantId]) // prevent duplicate cart entries
+  @@unique([userId, variantId]) 
 }
 
 model Favourites {
@@ -167,6 +167,24 @@ model OrderItem {
   variant   ProductVariant @relation(fields: [variantId], references: [id])
   variantId String
   quantity  Int
-  unitPrice Decimal        @db.Decimal(10, 2) // price at time of purchase
+  unitPrice Decimal        @db.Decimal(10, 2)
   total     Decimal        @db.Decimal(10, 2)
+}
+
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  action    String   
+  entity    String   
+  entityId  String?  
+  detail    String   
+  meta      Json?    
+  createdAt DateTime @default(now())
+}
+
+model SiteContent {
+  id        String   @id @default(uuid())
+  key       String   @unique  
+  value     String
+  updatedAt DateTime @updatedAt
 }

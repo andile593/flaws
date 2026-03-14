@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getLogin = getLogin;
 exports.postLogin = postLogin;
 exports.postLogout = postLogout;
+const logger_1 = require("../lib/logger");
 function getLogin(req, res) {
     const { loginLayout } = require('../views/layout');
     const error = req.query.error || '';
@@ -26,18 +27,20 @@ function getLogin(req, res) {
     </div>
   `));
 }
-function postLogin(req, res) {
+async function postLogin(req, res) {
     const { email, password } = req.body;
     if (email === process.env.ADMIN_EMAIL &&
         password === process.env.ADMIN_PASSWORD) {
         ;
         req.session.isAdmin = true;
+        await (0, logger_1.logActivity)('ADMIN_LOGIN', 'Admin', `Admin logged in`);
         res.redirect('/admin');
     }
     else {
         res.redirect('/admin/login?error=Invalid credentials');
     }
 }
-function postLogout(req, res) {
+async function postLogout(req, res) {
+    await (0, logger_1.logActivity)('ADMIN_LOGOUT', 'Admin', `Admin logged out`);
     req.session.destroy(() => res.redirect('/admin/login'));
 }

@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import prisma from '../../lib/prisma'
 import { layout } from '../views/layout'
 import { supabaseAdmin } from '../../lib/supabase'
+import { logActivity } from '../lib/logger'
 import path from 'path'
 
 export async function getProducts(req: Request, res: Response) {
@@ -215,7 +216,7 @@ export async function postProduct(req: Request, res: Response) {
     const variantsRaw = req.body.variants || {}
     const variants = Object.values(variantsRaw) as any[]
 
-    await prisma.product.create({
+    const product = await prisma.product.create({
       data: {
         name, slug,
         description: description || null,
@@ -241,6 +242,8 @@ export async function postProduct(req: Request, res: Response) {
         },
       },
     })
+
+    await logActivity('PRODUCT_CREATED', 'Product', `Product "${name}" created`, product.id)
 
     res.redirect('/admin/products')
   } catch (err: any) {
@@ -439,6 +442,8 @@ export async function postEditProduct(req: Request, res: Response) {
       },
     })
 
+    await logActivity('PRODUCT_UPDATED', 'Product', `Product "${name}" updated`, id)
+
     res.redirect('/admin/products')
   } catch (err: any) {
     res.redirect(`/admin/products/${id}/edit?error=${encodeURIComponent(err.message)}`)
@@ -447,7 +452,13 @@ export async function postEditProduct(req: Request, res: Response) {
 
 export async function deleteProduct(req: Request, res: Response) {
   const id = req.params.id as string
-  await prisma.product.delete({ where: { id } })
+  try {
+    const product = await prisma.product.findUnique({ where: { id } })
+    await prisma.product.delete({ where: { id } })
+    await logActivity('PRODUCT_DELETED', 'Product', `Product "${product?.name || id}" deleted`, id)
+  } catch (err) {
+    console.error('Delete product error:', err)
+  }
   res.redirect('/admin/products')
 }
 

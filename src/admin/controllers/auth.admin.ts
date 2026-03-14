@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { logActivity } from '../lib/logger'
 
 export function getLogin(req: Request, res: Response) {
   const { loginLayout } = require('../views/layout')
@@ -24,19 +25,21 @@ export function getLogin(req: Request, res: Response) {
   `))
 }
 
-export function postLogin(req: Request, res: Response) {
+export async function postLogin(req: Request, res: Response) {
   const { email, password } = req.body
   if (
     email === process.env.ADMIN_EMAIL &&
     password === process.env.ADMIN_PASSWORD
   ) {
     ;(req.session as any).isAdmin = true
+    await logActivity('ADMIN_LOGIN', 'Admin', `Admin logged in`)
     res.redirect('/admin')
   } else {
     res.redirect('/admin/login?error=Invalid credentials')
   }
 }
 
-export function postLogout(req: Request, res: Response) {
+export async function postLogout(req: Request, res: Response) {
+  await logActivity('ADMIN_LOGOUT', 'Admin', `Admin logged out`)
   req.session.destroy(() => res.redirect('/admin/login'))
 }

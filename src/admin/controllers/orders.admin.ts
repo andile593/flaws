@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import prisma from '../../lib/prisma'
 import { layout } from '../views/layout'
+import { logActivity } from '../lib/logger'
 
 export async function getOrders(req: Request, res: Response) {
   const status = req.query.status as string | undefined
@@ -145,5 +146,11 @@ export async function updateOrderStatus(req: Request, res: Response) {
   const id = req.params.id as string
   const { status } = req.body
   await prisma.order.update({ where: { id }, data: { status } })
+  await logActivity(
+    'ORDER_STATUS_CHANGED',
+    'Order',
+    `Order #${id.slice(0, 8).toUpperCase()} status changed to ${status}`,
+    id
+  )
   res.redirect(`/admin/orders/${id}`)
 }
