@@ -150,7 +150,7 @@ model Order {
   shippingCost    Decimal     @db.Decimal(10, 2) @default(0)
   discount        Decimal     @db.Decimal(10, 2) @default(0)
   total           Decimal     @db.Decimal(10, 2)
-  paymentRef      String?     // Stripe or Paystack payment reference
+  paystackReference String?   @unique
   isPaid          Boolean     @default(false)
   paidAt          DateTime?
   trackingNumber  String?

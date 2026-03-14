@@ -7,6 +7,7 @@ import authRoutes from './routes/auth.routes'
 import cartRoutes from './routes/cart.routes'
 import orderRoutes from './routes/order.routes'
 import addressRoutes from './routes/address.routes'
+import paymentRoutes from './routes/payment.routes'
 import adminRoutes from './admin/routes/admin.routes'
 import { errorHandler } from './middleware/errorHandler'
 
@@ -20,6 +21,9 @@ app.use(cors({
   ],
   credentials: true,
 }))
+
+app.use('/payment/webhook', express.raw({ type: 'application/json' }))
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -41,6 +45,7 @@ app.use('/collections', collectionRoutes)
 app.use('/cart', cartRoutes)
 app.use('/orders', orderRoutes)
 app.use('/addresses', addressRoutes)
+app.use('/payment', paymentRoutes)
 app.use('/admin', adminRoutes)
 
 app.use(errorHandler)

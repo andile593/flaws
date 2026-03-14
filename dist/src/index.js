@@ -12,6 +12,7 @@ const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const cart_routes_1 = __importDefault(require("./routes/cart.routes"));
 const order_routes_1 = __importDefault(require("./routes/order.routes"));
 const address_routes_1 = __importDefault(require("./routes/address.routes"));
+const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const admin_routes_1 = __importDefault(require("./admin/routes/admin.routes"));
 const errorHandler_1 = require("./middleware/errorHandler");
 const app = (0, express_1.default)();
@@ -23,6 +24,7 @@ app.use((0, cors_1.default)({
     ],
     credentials: true,
 }));
+app.use('/payment/webhook', express_1.default.raw({ type: 'application/json' }));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use((0, express_session_1.default)({
@@ -41,6 +43,7 @@ app.use('/collections', collection_routes_1.default);
 app.use('/cart', cart_routes_1.default);
 app.use('/orders', order_routes_1.default);
 app.use('/addresses', address_routes_1.default);
+app.use('/payment', payment_routes_1.default);
 app.use('/admin', admin_routes_1.default);
 app.use(errorHandler_1.errorHandler);
 app.listen(PORT, () => {
