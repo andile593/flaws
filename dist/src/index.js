@@ -16,18 +16,17 @@ const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const admin_routes_1 = __importDefault(require("./admin/routes/admin.routes"));
 const contact_routes_1 = __importDefault(require("./routes/contact.routes"));
 const content_routes_1 = __importDefault(require("./routes/content.routes"));
-const abandonedCart_1 = require("./jobs/abandonedCart");
 const errorHandler_1 = require("./middleware/errorHandler");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Run every hour
-setInterval(() => {
-    (0, abandonedCart_1.runAbandonedCartJob)().catch(console.error);
-}, 1000 * 60 * 60);
-// Also run once on startup after 5 minutes
-setTimeout(() => {
-    (0, abandonedCart_1.runAbandonedCartJob)().catch(console.error);
-}, 1000 * 60 * 5);
+// setInterval(() => {
+//   runAbandonedCartJob().catch(console.error)
+// }, 1000 * 60 * 60)
+// // Also run once on startup after 5 minutes
+// setTimeout(() => {
+//   runAbandonedCartJob().catch(console.error)
+// }, 1000 * 60 * 5)
 app.use((0, cors_1.default)({
     origin: [
         'https://flaws-production.up.railway.app',
