@@ -197,20 +197,26 @@ async function fulfillOrder({
 
 export const paystackWebhook = async (req: Request, res: Response) => {
   const secret = process.env.PAYSTACK_SECRET_KEY!
+  
+  const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body))
+  
   const hash = crypto
     .createHmac('sha512', secret)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex')
 
   if (hash !== req.headers['x-paystack-signature']) {
+    console.error('❌ Webhook signature mismatch')
     return res.status(401).send('Invalid signature')
   }
 
-  const event = req.body
+  const event = JSON.parse(rawBody.toString())
+  console.log('✅ Webhook received:', event.event)
 
   if (event.event === 'charge.success') {
     const { reference, metadata, amount } = event.data
     const { userId, addressId } = metadata
+    console.log('💳 charge.success for reference:', reference)
 
     try {
       await fulfillOrder({
@@ -220,8 +226,9 @@ export const paystackWebhook = async (req: Request, res: Response) => {
         amountInCents: amount,
         sendEmail: true,
       })
+      console.log('✅ Order fulfilled and email sent')
     } catch (err) {
-      console.error('Webhook fulfillment error:', err)
+      console.error('❌ Webhook fulfillment error:', err)
     }
   }
 
