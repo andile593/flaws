@@ -104,14 +104,17 @@ export async function getProducts(req: Request, res: Response) {
     document.getElementById('delete-modal').style.display = 'none'
   }
 
-  function confirmDelete() {
-    if (!pendingDeleteId) return
-    fetch('/admin/products/' + pendingDeleteId + '/delete', { method: 'POST' })
-      .then(() => { window.location.href = '/admin/products' })
-      .catch(() => { alert('Failed to delete product') })
-    closeModal()
-  }
-
+function confirmDelete() {
+  if (!pendingDeleteId) return
+  closeModal()
+  fetch('/admin/products/' + pendingDeleteId + '/delete', { method: 'POST' })
+    .then(res => {
+      if (!res.ok) return res.json().then(d => { throw new Error(d.error) })
+      window.location.href = '/admin/products'
+    })
+    .catch(err => alert('Failed to delete: ' + err.message))
+}
+    
   // Close on backdrop click
   document.getElementById('delete-modal').addEventListener('click', function(e) {
     if (e.target === this) closeModal()
@@ -531,13 +534,35 @@ export async function postEditProduct(req: Request, res: Response) {
 export async function deleteProduct(req: Request, res: Response) {
   const id = req.params.id as string
   try {
-    const product = await prisma.product.findUnique({ where: { id } })
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: { images: true },
+    })
+
+    // Delete images from Supabase storage
+    for (const image of product?.images || []) {
+      const fileName = image.url.split('/').pop()
+      if (fileName) {
+        await supabaseAdmin.storage
+          .from(process.env.SUPABASE_STORAGE_BUCKET || 'product-images')
+          .remove([fileName])
+      }
+    }
+
+    // Delete relations first
+    await prisma.productImage.deleteMany({ where: { productId: id } })
+    await prisma.productVariant.deleteMany({ where: { productId: id } })
+    await prisma.cart.deleteMany({ where: { productId: id } })
+
     await prisma.product.delete({ where: { id } })
+
     await logActivity('PRODUCT_DELETED', 'Product', `Product "${product?.name || id}" deleted`, id)
-  } catch (err) {
+
+    res.json({ success: true })
+  } catch (err: any) {
     console.error('Delete product error:', err)
+    res.status(500).json({ error: err.message })
   }
-  res.redirect('/admin/products')
 }
 
 export async function deleteProductImage(req: Request, res: Response) {

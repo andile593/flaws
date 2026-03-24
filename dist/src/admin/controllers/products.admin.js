@@ -112,14 +112,17 @@ async function getProducts(req, res) {
     document.getElementById('delete-modal').style.display = 'none'
   }
 
-  function confirmDelete() {
-    if (!pendingDeleteId) return
-    fetch('/admin/products/' + pendingDeleteId + '/delete', { method: 'POST' })
-      .then(() => { window.location.href = '/admin/products' })
-      .catch(() => { alert('Failed to delete product') })
-    closeModal()
-  }
-
+function confirmDelete() {
+  if (!pendingDeleteId) return
+  closeModal()
+  fetch('/admin/products/' + pendingDeleteId + '/delete', { method: 'POST' })
+    .then(res => {
+      if (!res.ok) return res.json().then(d => { throw new Error(d.error) })
+      window.location.href = '/admin/products'
+    })
+    .catch(err => alert('Failed to delete: ' + err.message))
+}
+    
   // Close on backdrop click
   document.getElementById('delete-modal').addEventListener('click', function(e) {
     if (e.target === this) closeModal()
@@ -514,14 +517,31 @@ async function postEditProduct(req, res) {
 async function deleteProduct(req, res) {
     const id = req.params.id;
     try {
-        const product = await prisma_1.default.product.findUnique({ where: { id } });
+        const product = await prisma_1.default.product.findUnique({
+            where: { id },
+            include: { images: true },
+        });
+        // Delete images from Supabase storage
+        for (const image of product?.images || []) {
+            const fileName = image.url.split('/').pop();
+            if (fileName) {
+                await supabase_1.supabaseAdmin.storage
+                    .from(process.env.SUPABASE_STORAGE_BUCKET || 'product-images')
+                    .remove([fileName]);
+            }
+        }
+        // Delete relations first
+        await prisma_1.default.productImage.deleteMany({ where: { productId: id } });
+        await prisma_1.default.productVariant.deleteMany({ where: { productId: id } });
+        await prisma_1.default.cart.deleteMany({ where: { productId: id } });
         await prisma_1.default.product.delete({ where: { id } });
         await (0, logger_1.logActivity)('PRODUCT_DELETED', 'Product', `Product "${product?.name || id}" deleted`, id);
+        res.json({ success: true });
     }
     catch (err) {
         console.error('Delete product error:', err);
+        res.status(500).json({ error: err.message });
     }
-    res.redirect('/admin/products');
 }
 async function deleteProductImage(req, res) {
     const productId = req.params.id;
