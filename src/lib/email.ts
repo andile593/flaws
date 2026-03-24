@@ -63,11 +63,9 @@ export async function sendOrderConfirmation(params: SendOrderConfirmationParams)
     </head>
     <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
       <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
-
         <div style="text-align:center;margin-bottom:40px;">
           <h1 style="margin:0;font-size:28px;font-weight:900;letter-spacing:0.4em;text-transform:uppercase;color:#ffffff;">FLAWS</h1>
         </div>
-
         <div style="border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;padding:24px 0;margin-bottom:32px;text-align:center;">
           <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.25em;text-transform:uppercase;color:#888888;">Order Confirmed</p>
           <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffffff;">
@@ -75,14 +73,12 @@ export async function sendOrderConfirmation(params: SendOrderConfirmationParams)
           </p>
           <p style="margin:8px 0 0;font-size:12px;color:#888888;letter-spacing:0.1em;">Order #${orderRef}</p>
         </div>
-
         <div style="margin-bottom:32px;">
           <p style="margin:0 0 16px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#888888;">Your Order</p>
           <table style="width:100%;border-collapse:collapse;">
             <tbody>${itemRows}</tbody>
           </table>
         </div>
-
         <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-bottom:32px;">
           <table style="width:100%;border-collapse:collapse;">
             <tr>
@@ -101,7 +97,6 @@ export async function sendOrderConfirmation(params: SendOrderConfirmationParams)
             </tr>
           </table>
         </div>
-
         <div style="background:#111111;border:1px solid #1a1a1a;padding:20px;margin-bottom:32px;">
           <p style="margin:0 0 12px;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#888888;">Delivery Address</p>
           <p style="margin:0;font-size:13px;color:#cccccc;line-height:1.8;">
@@ -112,30 +107,34 @@ export async function sendOrderConfirmation(params: SendOrderConfirmationParams)
             ${address.country}
           </p>
         </div>
-
         <div style="text-align:center;margin-bottom:40px;">
           <a href="${process.env.FRONTEND_URL}/orders/${orderId}"
              style="display:inline-block;padding:14px 40px;background:#ffffff;color:#0a0a0a;text-decoration:none;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;">
             Track Your Order
           </a>
         </div>
-
         <div style="border-top:1px solid #1a1a1a;padding-top:24px;text-align:center;">
           <p style="margin:0;font-size:11px;color:#555555;letter-spacing:0.1em;">© 2026 FLAWS. South Africa.</p>
           <p style="margin:8px 0 0;font-size:11px;color:#555555;">Questions? Reply to this email or contact us.</p>
         </div>
-
       </div>
     </body>
     </html>
   `
 
-  await getResend().emails.send({
-    from: getFrom(),
-    to,
-    subject: `Order Confirmed — #${orderRef}`,
-    html,
-  })
+  try {
+    const result = await getResend().emails.send({
+      from: getFrom(),
+      to,
+      subject: `Order Confirmed — #${orderRef}`,
+      html,
+    })
+    console.log('✅ Order confirmation sent:', result)
+  } catch (err) {
+    console.error('❌ sendOrderConfirmation failed:', err)
+    throw err
+  }
+
 }
 
 export async function sendOrderStatusUpdate(params: {
