@@ -1,104 +1,54 @@
 import { Request, Response } from 'express'
-import https from 'https'
 import crypto from 'crypto'
 import prisma from '../lib/prisma'
 import { sendOrderConfirmation } from '../lib/email'
 
-export const initializePayment = async (req: Request, res: Response) => {
-  try {
-    const { addressId } = req.body
-    const userId = req.user?.id
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' })
-    if (!addressId) return res.status(400).json({ message: 'Address required' })
+function generatePayFastSignature(
+  data: Record<string, string>,
+  passphrase: string | null = null
+): string {
+  // Sort keys, build query string
+  let queryString = Object.keys(data)
+    .map(key => `${key}=${encodeURIComponent(data[key]).replace(/%20/g, '+')}`)
+    .join('&')
 
-    const user = await prisma.user.findUnique({ where: { id: userId } })
-    if (!user) return res.status(404).json({ message: 'User not found' })
-
-    const cartItems = await prisma.cart.findMany({
-      where: { userId },
-      include: { variant: true, product: true },
-    })
-    if (cartItems.length === 0) return res.status(400).json({ message: 'Cart is empty' })
-
-    const subtotal = cartItems.reduce((sum, item) => {
-      const price = Number(item.variant.salePrice ?? item.variant.price)
-      return sum + price * item.quantity
-    }, 0)
-    const shipping = subtotal >= 1000 ? 0 : 100
-    const total = subtotal + shipping
-
-    const reference = `FLAWS-${Date.now()}-${Math.random().toString(36).slice(2).toUpperCase()}`
-
-    const params = JSON.stringify({
-      email: user.email,
-      amount: Math.round(total * 100),
-      currency: 'ZAR',
-      reference,
-      metadata: {
-        userId,
-        addressId,
-        custom_fields: [
-          { display_name: 'Customer', variable_name: 'customer', value: user.name },
-        ],
-      },
-    })
-
-    const options = {
-      hostname: 'api.paystack.co',
-      port: 443,
-      path: '/transaction/initialize',
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }
-
-    const paystackRes = await new Promise<any>((resolve, reject) => {
-      const reqPaystack = https.request(options, (paystackResponse) => {
-        let data = ''
-        paystackResponse.on('data', chunk => data += chunk)
-        paystackResponse.on('end', () => resolve(JSON.parse(data)))
-      })
-      reqPaystack.on('error', reject)
-      reqPaystack.write(params)
-      reqPaystack.end()
-    })
-
-    if (!paystackRes.status) {
-      return res.status(400).json({ message: 'Failed to initialize payment' })
-    }
-
-    res.json({
-      reference: paystackRes.data.reference,
-      accessCode: paystackRes.data.access_code,
-      publicKey: process.env.PAYSTACK_PUBLIC_KEY,
-      amount: total,
-      email: user.email,
-    })
-  } catch (err: any) {
-    res.status(500).json({ message: err.message })
+  if (passphrase) {
+    queryString += `&passphrase=${encodeURIComponent(passphrase).replace(/%20/g, '+')}`
   }
+
+  return crypto.createHash('md5').update(queryString).digest('hex')
 }
 
-// Shared helper — creates order, decrements stock, clears cart, sends email
+function validateITNSignature(
+  body: Record<string, string>,
+  passphrase: string | null = null
+): boolean {
+  const { signature, ...data } = body
+
+  // Remove signature from data before computing
+  const computedSignature = generatePayFastSignature(data, passphrase)
+  return computedSignature === signature
+}
+
+// ─── Shared fulfillment  ───────────────────────────────────
+
 async function fulfillOrder({
   userId,
   addressId,
   reference,
-  amountInCents,
+  amountInRands,
   sendEmail = false,
 }: {
   userId: string
   addressId: string
   reference: string
-  amountInCents: number
+  amountInRands: number
   sendEmail?: boolean
 }) {
-  // Check not already fulfilled
   const existing = await prisma.order.findFirst({
-    where: { paystackReference: reference },
+    where: { paymentReference: reference },
   })
   if (existing) return existing
 
@@ -113,9 +63,8 @@ async function fulfillOrder({
     return sum + price * item.quantity
   }, 0)
   const shipping = subtotal >= 1000 ? 0 : 100
-  const total = amountInCents / 100
+  const total = amountInRands // PayFast sends amount in Rands, not cents
 
-  // Create order
   const newOrder = await prisma.order.create({
     data: {
       userId,
@@ -125,7 +74,9 @@ async function fulfillOrder({
       shippingCost: shipping,
       discount: 0,
       total,
-      paystackReference: reference,
+      paymentReference: reference,
+      isPaid: true,
+      paidAt: new Date(),
       items: {
         create: cartItems.map(item => {
           const unitPrice = Number(item.variant.salePrice ?? item.variant.price)
@@ -148,7 +99,6 @@ async function fulfillOrder({
     },
   })
 
-  // Decrement stock
   for (const item of cartItems) {
     await prisma.productVariant.update({
       where: { id: item.variantId },
@@ -156,10 +106,8 @@ async function fulfillOrder({
     })
   }
 
-  // Clear cart
   await prisma.cart.deleteMany({ where: { userId } })
 
-  // Send email
   if (sendEmail) {
     try {
       if (newOrder.address) {
@@ -195,91 +143,147 @@ async function fulfillOrder({
   return newOrder
 }
 
-export const paystackWebhook = async (req: Request, res: Response) => {
-  const secret = process.env.PAYSTACK_SECRET_KEY!
-  const hash = crypto
-    .createHmac('sha512', secret)
-    .update(JSON.stringify(req.body))
-    .digest('hex')
+// ─── Controllers ────────────────────────────────────────────────────────────
 
-  if (hash !== req.headers['x-paystack-signature']) {
-    return res.status(401).send('Invalid signature')
-  }
+/**
+ * Returns the PayFast payment data + signature so the frontend can
+ * build a form and POST directly to PayFast.
+ */
+export const initializePayment = async (req: Request, res: Response) => {
+  try {
+    const { addressId } = req.body
+    const userId = req.user?.id
 
-  const event = req.body
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' })
+    if (!addressId) return res.status(400).json({ message: 'Address required' })
 
-  if (event.event === 'charge.success') {
-    const { reference, metadata, amount } = event.data
-    const { userId, addressId } = metadata
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return res.status(404).json({ message: 'User not found' })
 
-    try {
-      await fulfillOrder({
-        userId,
-        addressId,
-        reference,
-        amountInCents: amount,
-        sendEmail: true,
-      })
-    } catch (err) {
-      console.error('Webhook fulfillment error:', err)
+    const cartItems = await prisma.cart.findMany({
+      where: { userId },
+      include: { variant: true, product: true },
+    })
+    if (cartItems.length === 0) return res.status(400).json({ message: 'Cart is empty' })
+
+    const subtotal = cartItems.reduce((sum, item) => {
+      const price = Number(item.variant.salePrice ?? item.variant.price)
+      return sum + price * item.quantity
+    }, 0)
+    const shipping = subtotal >= 1000 ? 0 : 100
+    const total = subtotal + shipping
+
+    const reference = `FLAWS-${Date.now()}-${Math.random().toString(36).slice(2).toUpperCase()}`
+
+    const merchantId = process.env.PAYFAST_MERCHANT_ID!
+    const merchantKey = process.env.PAYFAST_MERCHANT_KEY!
+    const passphrase = process.env.PAYFAST_PASSPHRASE || null
+    const baseUrl = process.env.APP_BASE_URL!
+
+    const paymentData: Record<string, string> = {
+      merchant_id: merchantId,
+      merchant_key: merchantKey,
+      return_url: `${process.env.FRONTEND_URL}/payment/success?reference=${reference}`,
+      cancel_url: `${process.env.FRONTEND_URL}/checkout?cancelled=true`,
+      notify_url: `${process.env.API_BASE_URL}/api/payment/notify`,
+      name_first: user.name.split(' ')[0] ?? user.name,
+      name_last: user.name.split(' ').slice(1).join(' ') || '-',
+      email_address: user.email,
+      m_payment_id: reference,
+      amount: total.toFixed(2),
+      item_name: 'FLAWS Order',
+      // Pass metadata through custom fields
+      custom_str1: userId,
+      custom_str2: addressId,
     }
-  }
 
-  res.sendStatus(200)
+    const signature = generatePayFastSignature(paymentData, passphrase)
+
+    res.json({
+      paymentData: { ...paymentData, signature },
+      payFastUrl: process.env.PAYFAST_SANDBOX === 'true'
+        ? 'https://sandbox.payfast.co.za/eng/process'
+        : 'https://www.payfast.co.za/eng/process',
+      amount: total,
+    })
+  } catch (err: any) {
+    res.status(500).json({ message: err.message })
+  }
 }
 
+/**
+ * PayFast ITN (Instant Transaction Notification) handler.
+ * PayFast POSTs here server-to-server after payment.
+ * This is your source of truth — fulfill the order here.
+ */
+export const payfastITN = async (req: Request, res: Response) => {
+  try {
+    const body: Record<string, string> = req.body
+    const passphrase = process.env.PAYFAST_PASSPHRASE || null
+
+    // 1. Validate signature
+    if (!validateITNSignature(body, passphrase)) {
+      console.error('PayFast ITN: Invalid signature')
+      return res.status(400).send('Invalid signature')
+    }
+
+    // 2. Validate payment status
+    if (body.payment_status !== 'COMPLETE') {
+      // Not a completed payment — acknowledge and ignore
+      return res.sendStatus(200)
+    }
+
+    // 3. Validate amount matches expected (prevent price tampering)
+    const reference = body.m_payment_id
+    const amountPaid = parseFloat(body.amount_gross)
+    const userId = body.custom_str1
+    const addressId = body.custom_str2
+
+    if (!reference || !userId || !addressId) {
+      console.error('PayFast ITN: Missing required fields')
+      return res.status(400).send('Missing fields')
+    }
+
+    // 4. Fulfill
+    await fulfillOrder({
+      userId,
+      addressId,
+      reference,
+      amountInRands: amountPaid,
+      sendEmail: true,
+    })
+
+    res.sendStatus(200)
+  } catch (err) {
+    console.error('PayFast ITN error:', err)
+    res.sendStatus(200) // Always 200 to PayFast or it retries
+  }
+}
+
+/**
+ * Called when the frontend returns from PayFast (return_url redirect).
+ * Don't fulfill here — the ITN is the source of truth.
+ * Just look up the order by reference and return its ID.
+ */
 export const verifyPayment = async (req: Request, res: Response) => {
   try {
     const reference = req.params.reference as string
     const userId = req.user?.id
     if (!userId) return res.status(401).json({ message: 'Unauthorized' })
 
-    // Verify with Paystack
-    const options = {
-      hostname: 'api.paystack.co',
-      port: 443,
-      path: `/transaction/verify/${reference}`,
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      },
-    }
-
-    const paystackRes = await new Promise<any>((resolve, reject) => {
-      const reqPaystack = https.request(options, (paystackResponse) => {
-        let data = ''
-        paystackResponse.on('data', chunk => data += chunk)
-        paystackResponse.on('end', () => resolve(JSON.parse(data)))
-      })
-      reqPaystack.on('error', reject)
-      reqPaystack.end()
-    })
-
-    if (!paystackRes.data || paystackRes.data.status !== 'success') {
-      return res.status(400).json({ message: 'Payment not successful' })
-    }
-
-    const { metadata, amount } = paystackRes.data
-    const { addressId } = metadata
-
-    // Try to fulfill — if webhook already did it, returns existing order
-    const order = await fulfillOrder({
-      userId,
-      addressId,
-      reference,
-      amountInCents: amount,
-      sendEmail: false, // webhook handles email — avoid double sending
+    // ITN may arrive slightly before/after redirect — retry briefly
+    let order = await prisma.order.findFirst({
+      where: { paymentReference: reference },
     })
 
     if (!order) {
-      // Wait briefly for webhook then retry
-      await new Promise(r => setTimeout(r, 2000))
-      const retryOrder = await prisma.order.findFirst({
-        where: { paystackReference: reference },
+      await new Promise(r => setTimeout(r, 3000))
+      order = await prisma.order.findFirst({
+        where: { paymentReference: reference },
       })
-      if (!retryOrder) return res.status(404).json({ message: 'Order not found' })
-      return res.json({ orderId: retryOrder.id })
     }
+
+    if (!order) return res.status(404).json({ message: 'Order not found yet' })
 
     res.json({ orderId: order.id })
   } catch (err: any) {
