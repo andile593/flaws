@@ -1,16 +1,19 @@
 import { Request, Response } from 'express'
 import prisma from '../../lib/prisma'
 import { layout } from '../views/layout'
-
+ 
 export async function adminGetWaitlist(req: Request, res: Response) {
-  const entries = await prisma.waitlistEntry.findMany({
-    orderBy: { createdAt: 'desc' },
-  })
-
+  const [entries, waitlistModeSetting] = await Promise.all([
+    prisma.waitlistEntry.findMany({ orderBy: { createdAt: 'desc' } }),
+    prisma.siteContent.findUnique({ where: { key: 'waitlist_mode' } }),
+  ])
+ 
+  const waitlistMode = waitlistModeSetting?.value !== 'false'
+ 
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
   const weekCount = entries.filter(e => new Date(e.createdAt) >= oneWeekAgo).length
-
+ 
   const rows = entries.map(e => `
     <tr>
       <td><strong>${e.name}</strong></td>
@@ -24,13 +27,45 @@ export async function adminGetWaitlist(req: Request, res: Response) {
       <td style="color:#555;font-size:0.7rem;">${new Date(e.createdAt).toLocaleDateString('en-ZA')}</td>
     </tr>
   `).join('')
-
+ 
   const body = `
     <div class="page-header">
       <span class="page-title">Waitlist</span>
       <a href="/admin/waitlist/export" class="btn btn-secondary">↓ Export CSV</a>
     </div>
-
+ 
+    <!-- Waitlist Mode Toggle -->
+    <div style="
+      display:flex;justify-content:space-between;align-items:center;
+      padding:1.25rem 1.5rem;
+      background:#111;border:1px solid ${waitlistMode ? '#4fc3f733' : '#1a1a1a'};
+      margin-bottom:1.5rem;
+    ">
+      <div>
+        <div style="font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:#888;margin-bottom:0.35rem;">
+          Waitlist Mode
+        </div>
+        <div style="font-size:0.8rem;color:${waitlistMode ? '#4fc3f7' : '#555'};">
+          ${waitlistMode
+            ? 'Site is showing the waitlist page to all visitors'
+            : 'Site is fully live — showing the store'}
+        </div>
+      </div>
+      <form method="POST" action="/admin/waitlist/toggle">
+        <button type="submit" style="
+          padding:0.75rem 1.5rem;
+          background:${waitlistMode ? '#ffffff' : 'none'};
+          color:${waitlistMode ? '#0a0a0a' : '#888'};
+          border:1px solid ${waitlistMode ? '#ffffff' : '#333'};
+          font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;
+          font-weight:600;cursor:pointer;font-family:inherit;
+          transition:all 0.2s;
+        ">
+          ${waitlistMode ? '🚀 Launch Site' : '⏸ Enable Waitlist'}
+        </button>
+      </form>
+    </div>
+ 
     <div class="card-grid" style="margin-bottom:1.5rem;">
       <div class="card">
         <div class="stat-label">Total Signups</div>
@@ -41,7 +76,7 @@ export async function adminGetWaitlist(req: Request, res: Response) {
         <div class="stat-value">${weekCount}</div>
       </div>
     </div>
-
+ 
     <div class="card">
       ${entries.length === 0
         ? '<div class="empty-state">No signups yet. Share the link.</div>'
@@ -62,20 +97,36 @@ export async function adminGetWaitlist(req: Request, res: Response) {
       }
     </div>
   `
-
+ 
   res.send(layout('Waitlist', body, 'waitlist'))
 }
-
+ 
+export async function adminToggleWaitlistMode(req: Request, res: Response) {
+  const current = await prisma.siteContent.findUnique({
+    where: { key: 'waitlist_mode' },
+  })
+ 
+  const newValue = current?.value === 'false' ? 'true' : 'false'
+ 
+  await prisma.siteContent.upsert({
+    where: { key: 'waitlist_mode' },
+    update: { value: newValue },
+    create: { key: 'waitlist_mode', value: newValue },
+  })
+ 
+  res.redirect('/admin/waitlist')
+}
+ 
 export async function adminExportWaitlistCSV(req: Request, res: Response) {
   const entries = await prisma.waitlistEntry.findMany({
     orderBy: { createdAt: 'desc' },
   })
-
+ 
   const header = 'Name,Email,City,Province,Interests,Joined\n'
   const rows = entries.map(e =>
     `"${e.name}","${e.email}","${e.city}","${e.province}","${e.interests.join('|')}","${new Date(e.createdAt).toLocaleDateString('en-ZA')}"`
   ).join('\n')
-
+ 
   res.setHeader('Content-Type', 'text/csv')
   res.setHeader('Content-Disposition', 'attachment; filename="flaws-waitlist.csv"')
   res.send(header + rows)
