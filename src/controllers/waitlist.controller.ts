@@ -5,10 +5,10 @@ import { sendWaitlistConfirmation } from '../lib/email'
 // POST /waitlist
 export const joinWaitlist = async (req: Request, res: Response) => {
   try {
-    const { name, email, city, province, interests } = req.body
+    const { name, email, city, } = req.body
 
-    if (!name || !email || !city || !province) {
-      return res.status(400).json({ message: 'Name, email, city and province are required' })
+    if (!name || !email || !city ) {
+      return res.status(400).json({ message: 'Name, email, city are required' })
     }
 
     // Check for existing entry
@@ -22,8 +22,6 @@ export const joinWaitlist = async (req: Request, res: Response) => {
         name,
         email,
         city,
-        province,
-        interests: interests || [],
       },
     })
 

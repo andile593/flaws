@@ -197,7 +197,5 @@ model WaitlistEntry {
   name      String
   email     String   @unique
   city      String
-  province  String
-  interests String[] // e.g. ["STREETWEAR", "FOOTWEAR"]
   createdAt DateTime @default(now())
 }
