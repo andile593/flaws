@@ -116,7 +116,7 @@ export async function adminExportWaitlistCSV(req: Request, res: Response) {
     orderBy: { createdAt: 'desc' },
   })
  
-  const header = 'Name,Email,City,Province,Interests,Joined\n'
+  const header = 'Name,Email,City,Joined\n'
   const rows = entries.map(e =>
     `"${e.name}","${e.email}","${e.city}","${new Date(e.createdAt).toLocaleDateString('en-ZA')}"`
   ).join('\n')
